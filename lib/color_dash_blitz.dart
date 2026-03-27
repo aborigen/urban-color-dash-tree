@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_yandex_games/flutter_yandex_games.dart';
+import 'yandex_games.dart' as yg;
 
 class ColorDashBlitzGame extends StatefulWidget {
   const ColorDashBlitzGame({super.key});
@@ -37,15 +37,31 @@ class _ColorDashBlitzGameState extends State<ColorDashBlitzGame> {
   @override
   void initState() {
     super.initState();
-    _initYandexGames();
+    // _initYandexGames();
     _nextRound();
   }
 
   Future<void> _initYandexGames() async {
-    await YandexGames.init();
+    await yg.init();
+    try {
+      final leaderboards = await yg.getLeaderboards();
+      final playerEntry = await leaderboards.getPlayerEntry('high_scores');
+      if (mounted) {
+        setState(() {
+          _highScore = playerEntry.score;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _highScore = 0;
+        });
+      }
+    }
   }
 
   void _startGame() {
+    // yg.showFullScreenAd();
     setState(() {
       _score = 0;
       _level = 1;
@@ -62,11 +78,17 @@ class _ColorDashBlitzGameState extends State<ColorDashBlitzGame> {
           _isGameRunning = false;
           if (_score > _highScore) {
             _highScore = _score;
+            _updateLeaderboard();
           }
           _timer?.cancel();
         }
       });
     });
+  }
+
+  Future<void> _updateLeaderboard() async {
+    final leaderboards = await yg.getLeaderboards();
+    await leaderboards.set('high_scores', _highScore);
   }
 
   void _nextRound() {
@@ -76,13 +98,12 @@ class _ColorDashBlitzGameState extends State<ColorDashBlitzGame> {
     final shuffledKeys = _allColors.keys.toList()..shuffle(random);
     final roundKeys = shuffledKeys.sublist(0, optionsCount);
 
-    _currentColors = {
-      for (var key in roundKeys) key: _allColors[key]!
-    };
+    _currentColors = {for (var key in roundKeys) key: _allColors[key]!};
 
     _targetColorName = roundKeys[random.nextInt(roundKeys.length)];
-    _targetColor =
-        _currentColors.values.elementAt(random.nextInt(_currentColors.length));
+    _targetColor = _currentColors.values.elementAt(
+      random.nextInt(_currentColors.length),
+    );
 
     if (mounted) {
       setState(() {});
@@ -112,26 +133,23 @@ class _ColorDashBlitzGameState extends State<ColorDashBlitzGame> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Color Dash Blitz'),
-      ),
-      body: LayoutBuilder(builder: (context, constraints) {
-        final bool isWide = constraints.maxWidth > 600;
+      appBar: AppBar(title: const Text('Color Dash Blitz')),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final bool isWide = constraints.maxWidth > 600;
 
-        return Center(
-          child: _isGameRunning
-              ? _buildGameContent(context, isWide)
-              : _buildGameOverContent(context),
-        );
-      }),
+          return Center(
+            child: _isGameRunning
+                ? _buildGameContent(context, isWide)
+                : _buildGameOverContent(context),
+          );
+        },
+      ),
     );
   }
 
   Widget _buildGameContent(BuildContext context, bool isWide) {
-    final gameWidgets = <Widget>[
-      _buildGameInfo(context),
-      _buildColorGrid(),
-    ];
+    final gameWidgets = <Widget>[_buildGameInfo(context), _buildColorGrid()];
 
     return isWide
         ? Row(
@@ -139,7 +157,9 @@ class _ColorDashBlitzGameState extends State<ColorDashBlitzGame> {
             children: gameWidgets.map((w) => Expanded(child: w)).toList(),
           )
         : Column(
-            mainAxisAlignment: MainAxisAlignment.center, children: gameWidgets);
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: gameWidgets,
+          );
   }
 
   Widget _buildGameInfo(BuildContext context) {
@@ -151,22 +171,27 @@ class _ColorDashBlitzGameState extends State<ColorDashBlitzGame> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Score: $_score',
-                  style: Theme.of(context).textTheme.headlineSmall),
-              Text('Level: $_level',
-                  style: Theme.of(context).textTheme.headlineSmall),
+              Text(
+                'Score: $_score',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              Text(
+                'Level: $_level',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
             ],
           ),
           const SizedBox(height: 10),
-          Text('High Score: $_highScore',
-              style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            'High Score: $_highScore',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 20),
           Text(
             'Time Left: $_timeLeft',
-            style: Theme.of(context)
-                .textTheme
-                .headlineMedium
-                ?.copyWith(color: Colors.red),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(color: Colors.red),
           ),
           const SizedBox(height: 40),
           Text(
@@ -205,10 +230,11 @@ class _ColorDashBlitzGameState extends State<ColorDashBlitzGame> {
         return ElevatedButton(
           onPressed: () => _checkAnswer(entry.value),
           style: ElevatedButton.styleFrom(
-              backgroundColor: entry.value,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
-              )),
+            backgroundColor: entry.value,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
+            ),
+          ),
           child: const Text(''),
         );
       },
@@ -233,14 +259,11 @@ class _ColorDashBlitzGameState extends State<ColorDashBlitzGame> {
         ],
         Text(
           'High Score: $_highScore',
-          style: Theme.of(context)
-              .textTheme
-              .headlineMedium
-              ?.copyWith(color: Theme.of(context).colorScheme.primary),
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            color: Theme.of(context).colorScheme.primary,
+          ),
         ),
-        const SizedBox(
-          height: 40,
-        ),
+        const SizedBox(height: 40),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
